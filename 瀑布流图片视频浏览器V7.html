@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>瀑布流图片视频浏览器</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f0f0;
+        }
+        #container {
+            display: flex;
+            flex-wrap: wrap;
+            padding: 10px;
+            position: relative;
+        }
+        .item {
+            margin-bottom: 10px;
+            cursor: pointer;
+            position: relative;
+            width: calc(25% - 10px);
+            margin-right: 10px;
+        }
+        .item:nth-child(4n) {
+            margin-right: 0;
+        }
+        .item .filename {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            padding: 5px;
+            font-size: 12px;
+            border-radius: 8px 8px 0 0;
+        }
+        .item img, .item video {
+            width: 100%;
+            border-radius: 0 0 8px 8px;
+        }
+        .item .label {
+            position: absolute;
+            bottom: 5px;
+            right: 5px;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            padding: 2px 5px;
+            font-size: 12px;
+            border-radius: 4px;
+        }
+        .item .checkbox {
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            width: 20px;
+            height: 20px;
+            background-color: rgba(255, 255, 255, 0.8);
+            border: 2px solid #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .item .checkbox.checked {
+            background-color: #4caf50;
+            border-color: #4caf50;
+        }
+        #overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+        #overlay img, #overlay video {
+            max-width: 90%;
+            max-height: 90%;
+            border-radius: 8px;
+        }
+        #overlay .controls {
+            display: flex;
+            justify-content: space-between;
+            width: 90%;
+            margin-top: 10px;
+        }
+        #overlay .controls button {
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-size: 16px;
+            border-radius: 4px;
+        }
+        #overlay .progress {
+            color: white;
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+        #overlay .progress-bar {
+            width: 90%;
+            margin-top: 10px;
+        }
+        #overlay .filename {
+            color: white;
+            font-size: 18px;
+            margin-bottom: 10px;
+            cursor: pointer;
+        }
+        #overlay .folder-path {
+            color: white;
+            font-size: 14px;
+            margin-top: 5px;
+            display: none;
+            cursor: pointer;
+        }
+        #overlay .checkbox {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            width: 30px;
+            height: 30px;
+            background-color: rgba(255, 255, 255, 0.8);
+            border: 2px solid #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        #overlay .checkbox.checked {
+            background-color: #4caf50;
+            border-color: #4caf50;
+        }
+        #fileInput {
+            display: none;
+        }
+        #selectFolderButton {
+            display: block;
+            margin: 20px auto;
+            padding: 10px 20px;
+            cursor: pointer;
+        }
+        #sizeSliderContainer {
+            position: fixed;
+            left: 10px;
+            top: 10px;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 4px;
+            z-index: 1000;
+        }
+        #sizeSlider {
+            width: 100%;
+        }
+        #sortSelect {
+            position: fixed;
+            right: 10px;
+            top: 10px;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 4px;
+            z-index: 1000;
+        }
+        #exportButton {
+            position: fixed;
+            right: 10px;
+            top: 60px;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            z-index: 1000;
+        }
+        #downloadNote {
+            position: fixed;
+            right: 10px;
+            top: 100px;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            z-index: 1000;
+        }
+        #filterSelect {
+            position: fixed;
+            left: 10px;
+            top: 60px;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 4px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+        }
+        #filterSelect label {
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <button id="selectFolderButton">添加文件夹</button>
+    <input type="file" id="fileInput" webkitdirectory directory multiple>
+    <div id="sizeSliderContainer">
+        <label for="sizeSlider">预览图尺寸: <span id="sizeValue">100%</span></label>
+        <input type="range" id="sizeSlider" min="50" max="200" value="100" step="10">
+    </div>
+    <div id="sortSelect">
+        <label for="sortOption">排序方式: </label>
+        <select id="sortOption">
+            <option value="default">默认</option>
+            <option value="created">创建时间</option>
+            <option value="exif">EXIF时间</option>
+            <option value="name">文件名</option>
+            <option value="random">随机</option>
+        </select>
+    </div>
+    <div id="filterSelect">
+        <label for="filterAll">
+            <input type="checkbox" id="filterAll" checked> 全部
+        </label>
+        <!-- Checkboxes will be added dynamically -->
+    </div>
+    <button id="exportButton">下载复选文件</button>
+    <div id="downloadNote">在点击下载复选文件按钮前，请先关闭浏览器中的“下载前询问每个文件的保存位置”设置。</div>
+    <div id="container"></div>
+    <div id="overlay">
+        <div class="progress" id="progress"></div>
+        <input type="range" class="progress-bar" id="progressBar" min="0" max="100" value="0">
+        <img id="overlay-img" src="" alt="">
+        <video id="overlay-video" controls>
+            <source src="" type="video/mp4">
+        </video>
+        <div class="controls">
+            <button id="prevButton">上一张</button>
+            <button id="nextButton">下一张</button>
+        </div>
+        <div class="filename" id="overlay-filename"></div>
+        <div class="folder-path" id="overlay-folder-path"></div>
+        <div class="checkbox" id="overlay-checkbox"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.3/dist/heic2any.min.js"></script>
+    <script>
+        const container = document.getElementById('container');
+        const overlay = document.getElementById('overlay');
+        const overlayImg = document.getElementById('overlay-img');
+        const overlayVideo = document.getElementById('overlay-video');
+        const fileInput = document.getElementById('fileInput');
+        const selectFolderButton = document.getElementById('selectFolderButton');
+        const prevButton = document.getElementById('prevButton');
+        const nextButton = document.getElementById('nextButton');
+        const progress = document.getElementById('progress');
+        const progressBar = document.getElementById('progressBar');
+        const sizeSlider = document.getElementById('sizeSlider');
+        const sizeValue = document.getElementById('sizeValue');
+        const sortOption = document.getElementById('sortOption');
+        const filterSelect = document.getElementById('filterSelect');
+        const filterAll = document.getElementById('filterAll');
+        const overlayFilename = document.getElementById('overlay-filename');
+        const overlayFolderPath = document.getElementById('overlay-folder-path');
+        const overlayCheckbox = document.getElementById('overlay-checkbox');
+        const exportButton = document.getElementById('exportButton');
+        let files = [];
+        let filteredFiles = [];
+        let currentPage = 0;
+        let currentIndex = 0;
+        let selectedFiles = new Set();
+        const itemsPerPage = 10;
+        let fileFormats = new Set();
+        let displayedFiles = [];
+
+        function handleFiles(fileList) {
+            files = [];
+            fileFormats.clear();
+            for (let file of fileList) {
+                if (file.type.startsWith('image/') || file.type.startsWith('video/')) {
+                    files.push(file);
+                    fileFormats.add(file.name.split('.').pop().toLowerCase());
+                }
+            }
+            currentPage = 0;
+            sortFiles();
+            updateFilterOptions();
+            filterFiles();
+            displayFiles();
+        }
+
+        function sortFiles() {
+            const sortBy = sortOption.value;
+            switch (sortBy) {
+                case 'created':
+                    files.sort((a, b) => a.lastModified - b.lastModified);
+                    break;
+                case 'exif':
+                    files.sort((a, b) => getExifTime(a) - getExifTime(b));
+                    break;
+                case 'name':
+                    files.sort((a, b) => a.name.localeCompare(b.name));
+                    break;
+                case 'random':
+                    files.sort(() => Math.random() - 0.5);
+                    break;
+                default:
+                    // Default order
+                    break;
+            }
+        }
+
+        function getExifTime(file) {
+            // Placeholder for EXIF time extraction
+            // You need to implement this function to extract EXIF time from the file
+            return 0;
+        }
+
+        function updateFilterOptions() {
+            filterSelect.innerHTML = '<label for="filterAll"><input type="checkbox" id="filterAll" checked> 全部</label>';
+            for (let format of fileFormats) {
+                const label = document.createElement('label');
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.value = format;
+                checkbox.checked = true;
+                checkbox.onchange = filterFiles;
+                label.appendChild(checkbox);
+                label.appendChild(document.createTextNode(` ${format}`));
+                filterSelect.appendChild(label);
+            }
+        }
+
+        function filterFiles() {
+            const checkboxes = filterSelect.querySelectorAll('input[type="checkbox"]');
+            const selectedFormats = Array.from(checkboxes).filter(checkbox => checkbox.checked).map(checkbox => checkbox.value);
+            if (selectedFormats.length === 0 || (selectedFormats.length === 1 && selectedFormats[0] === '全部')) {
+                filteredFiles = files;
+            } else {
+                filteredFiles = files.filter(file => selectedFormats.includes(file.name.split('.').pop().toLowerCase()));
+            }
+            currentPage = 0;
+            displayedFiles = [];
+            container.innerHTML = '';
+            displayFiles();
+        }
+
+        async function displayFiles() {
+            const fragment = document.createDocumentFragment();
+            const start = currentPage * itemsPerPage;
+            const end = start + itemsPerPage;
+            for (let i = start; i < end && i < filteredFiles.length; i++) {
+                const file = filteredFiles[i];
+                if (displayedFiles.includes(file)) continue;
+                displayedFiles.push(file);
+                const item = document.createElement('div');
+                item.classList.add('item');
+
+                const filename = document.createElement('div');
+                filename.classList.add('filename');
+                filename.textContent = file.name;
+                item.appendChild(filename);
+
+                const checkbox = document.createElement('div');
+                checkbox.classList.add('checkbox');
+                checkbox.onclick = (e) => {
+                    e.stopPropagation(); // Prevent triggering the item click event
+                    toggleCheckbox(i);
+                };
+                item.appendChild(checkbox);
+
+                if (file.type.startsWith('image/')) {
+                    let imgSrc = file.type === 'image/heic' ? await convertHeicToJpeg(file) : URL.createObjectURL(file);
+                    const img = document.createElement('img');
+                    img.src = imgSrc;
+                    img.style.width = `${sizeSlider.value}%`;
+                    item.appendChild(img);
+                    item.onclick = (e) => {
+                        if (!e.target.classList.contains('checkbox')) {
+                            showOverlay(img.src, 'img', i);
+                        }
+                    };
+                } else if (file.type.startsWith('video/')) {
+                    const video = document.createElement('video');
+                    video.src = URL.createObjectURL(file);
+                    video.style.width = `${sizeSlider.value}%`;
+                    item.appendChild(video);
+                    item.onclick = (e) => {
+                        if (!e.target.classList.contains('checkbox')) {
+                            showOverlay(video.src, 'video', i);
+                        }
+                    };
+                }
+
+                const label = document.createElement('div');
+                label.classList.add('label');
+                label.textContent = `${file.type.startsWith('image/') ? '图片' : '视频'} (${file.name.split('.').pop()})`;
+                item.appendChild(label);
+
+                fragment.appendChild(item);
+            }
+            container.appendChild(fragment);
+            currentPage++;
+        }
+
+        async function convertHeicToJpeg(file) {
+            const result = await heic2any({
+                blob: file,
+                toType: 'image/jpeg',
+                quality: 0.9
+            });
+            return URL.createObjectURL(result);
+        }
+
+        function showOverlay(src, type, index) {
+            currentIndex = index;
+            const file = filteredFiles[currentIndex];
+            progress.textContent = `${currentIndex + 1}/${filteredFiles.length}`;
+            progressBar.value = ((currentIndex + 1) / filteredFiles.length) * 100;
+            overlayFilename.textContent = file.name;
+            overlayFolderPath.textContent = file.webkitRelativePath;
+            overlayFolderPath.style.display = 'none';
+            overlayCheckbox.classList.toggle('checked', selectedFiles.has(file));
+
+            if (type === 'img') {
+                overlayImg.src = src;
+                overlayImg.style.display = 'block';
+                overlayVideo.style.display = 'none';
+            } else if (type === 'video') {
+                overlayVideo.src = src;
+                overlayVideo.style.display = 'block';
+                overlayImg.style.display = 'none';
+            }
+            overlay.style.display = 'flex';
+            updateControls();
+        }
+
+        function updateControls() {
+            prevButton.disabled = currentIndex === 0;
+            nextButton.disabled = currentIndex === filteredFiles.length - 1;
+        }
+
+        function checkScroll() {
+            if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 500) {
+                displayFiles();
+            }
+        }
+
+        prevButton.onclick = () => {
+            if (currentIndex > 0) {
+                currentIndex--;
+                const file = filteredFiles[currentIndex];
+                if (file.type.startsWith('image/')) {
+                    showOverlay(URL.createObjectURL(file), 'img', currentIndex);
+                } else if (file.type.startsWith('video/')) {
+                    showOverlay(URL.createObjectURL(file), 'video', currentIndex);
+                }
+            }
+        };
+
+        nextButton.onclick = () => {
+            if (currentIndex < filteredFiles.length - 1) {
+                currentIndex++;
+                const file = filteredFiles[currentIndex];
+                if (file.type.startsWith('image/')) {
+                    showOverlay(URL.createObjectURL(file), 'img', currentIndex);
+                } else if (file.type.startsWith('video/')) {
+                    showOverlay(URL.createObjectURL(file), 'video', currentIndex);
+                }
+            }
+        };
+
+        selectFolderButton.onclick = () => {
+            fileInput.click();
+        };
+
+        fileInput.onchange = (e) => {
+            handleFiles(e.target.files);
+        };
+
+        overlay.onclick = (e) => {
+            if (e.target === overlay) {
+                overlay.style.display = 'none';
+                overlayImg.src = '';
+                overlayVideo.src = '';
+            }
+        };
+
+        document.addEventListener('keydown', (e) => {
+            if (overlay.style.display === 'flex') {
+                if (e.key === 'ArrowLeft' || e.key === 'a') {
+                    prevButton.click();
+                } else if (e.key === 'ArrowRight' || e.key === 'd') {
+                    nextButton.click();
+                } else if (e.key === ' ') {
+                    e.preventDefault(); // Prevent default scrolling behavior
+                    toggleCheckbox(currentIndex);
+                }
+            }
+        });
+
+        sizeSlider.oninput = () => {
+            sizeValue.textContent = `${sizeSlider.value}%`;
+            const items = container.getElementsByClassName('item');
+            for (let item of items) {
+                const img = item.querySelector('img');
+                const video = item.querySelector('video');
+                if (img) {
+                    img.style.width = `${sizeSlider.value}%`;
+                }
+                if (video) {
+                    video.style.width = `${sizeSlider.value}%`;
+                }
+            }
+            adjustColumns();
+        };
+
+        function adjustColumns() {
+            const containerWidth = container.clientWidth;
+            const itemWidth = (sizeSlider.value / 100) * (containerWidth / 4);
+            const columns = Math.floor(containerWidth / itemWidth);
+            container.style.columnCount = columns;
+        }
+
+        progressBar.oninput = () => {
+            const newIndex = Math.round((progressBar.value / 100) * (filteredFiles.length - 1));
+            if (newIndex !== currentIndex) {
+                currentIndex = newIndex;
+                const file = filteredFiles[currentIndex];
+                if (file.type.startsWith('image/')) {
+                    showOverlay(URL.createObjectURL(file), 'img', currentIndex);
+                } else if (file.type.startsWith('video/')) {
+                    showOverlay(URL.createObjectURL(file), 'video', currentIndex);
+                }
+            }
+        };
+
+        sortOption.onchange = () => {
+            currentPage = 0;
+            displayedFiles = [];
+            container.innerHTML = '';
+            sortFiles();
+            filterFiles();
+            displayFiles();
+        };
+
+        filterAll.onchange = () => {
+            const checkboxes = filterSelect.querySelectorAll('input[type="checkbox"]');
+            checkboxes.forEach(checkbox => checkbox.checked = filterAll.checked);
+            filterFiles();
+        };
+
+        overlayFilename.onclick = () => {
+            overlayFolderPath.style.display = overlayFolderPath.style.display === 'none' ? 'block' : 'none';
+        };
+
+        overlayFolderPath.onclick = () => {
+            const file = filteredFiles[currentIndex];
+            const folderPath = file.webkitRelativePath.split('/').slice(0, -1).join('/');
+            window.open(`file:///${folderPath}`, '_blank');
+        };
+
+        overlayCheckbox.onclick = () => {
+            toggleCheckbox(currentIndex);
+        };
+
+        function toggleCheckbox(index) {
+            const file = filteredFiles[index];
+            if (selectedFiles.has(file)) {
+                selectedFiles.delete(file);
+            } else {
+                selectedFiles.add(file);
+            }
+            updateCheckboxes();
+        }
+
+        function updateCheckboxes() {
+            const checkboxes = container.getElementsByClassName('checkbox');
+            for (let i = 0; i < checkboxes.length; i++) {
+                const checkbox = checkboxes[i];
+                const file = filteredFiles[i];
+                checkbox.classList.toggle('checked', selectedFiles.has(file));
+            }
+            overlayCheckbox.classList.toggle('checked', selectedFiles.has(filteredFiles[currentIndex]));
+        }
+
+        exportButton.onclick = async () => {
+            for (let file of selectedFiles) {
+                const url = URL.createObjectURL(file);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = file.name;
+                a.style.display = 'none';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }
+            alert('下载完成');
+        };
+
+        window.addEventListener('scroll', checkScroll);
+        window.addEventListener('resize', checkScroll);
+    </script>
+</body>
+</html>
